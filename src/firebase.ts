@@ -5,7 +5,9 @@ import * as admin from 'firebase-admin';
 // Localmente, defina GOOGLE_APPLICATION_CREDENTIALS apontando para
 // um arquivo de service account baixado do console do Firebase.
 if (!admin.apps.length) {
-  admin.initializeApp();
+  admin.initializeApp({
+    projectId: process.env.FIREBASE_PROJECT_ID,
+  });
 }
 
 export const auth = admin.auth();
