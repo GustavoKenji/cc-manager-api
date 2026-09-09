@@ -27,7 +27,7 @@ Todas as rotas em `/cards` exigem um header `Authorization: Bearer <idToken>`. E
 ## Deploy no Cloud Run
 
 ```bash
-gcloud run deploy gerenciador-cartoes-api \
+gcloud run deploy cc-manager-api \
   --source . \
   --region southamerica-east1 \
   --allow-unauthenticated

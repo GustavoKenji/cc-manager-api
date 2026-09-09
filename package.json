@@ -1,5 +1,5 @@
 {
-  "name": "gerenciador-cartoes-api",
+  "name": "cc-manager-api",
   "version": "1.0.0",
   "description": "API do gerenciador de cartões de crédito",
   "main": "dist/index.js",
