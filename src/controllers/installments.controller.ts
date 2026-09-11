@@ -22,12 +22,12 @@ export async function getInvoice(req: Request, res: Response) {
   const installments = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() } as Installment & { id: string }));
   const total = installments.reduce((sum, item) => sum + item.amount, 0);
 
-  res.json({
-    month,
-    total: Math.round(total * 100) / 100,
-    status: calcularStatusFatura(month, card.closingDay),
-    installments,
-  });
+  const status =
+    installments.length > 0 && installments.every((i) => i.status === 'paid')
+      ? 'paid'
+      : calcularStatusFatura(month, card.closingDay);
+
+  res.json({ month, total: Math.round(total * 100) / 100, status, installments });
 }
 
 export async function listInvoiceMonths(req: Request, res: Response) {
@@ -59,4 +59,26 @@ export async function updateInstallmentStatus(req: Request, res: Response) {
   await ref.update({ status });
   const updated = await ref.get();
   res.json({ id: updated.id, ...updated.data() });
+}
+
+export async function updateInvoiceStatus(req: Request, res: Response) {
+  const { cardId, month } = req.params;
+  const { status } = req.body as { status: InstallmentStatus };
+
+  if (status !== 'pending' && status !== 'paid') {
+    return res.status(400).json({ error: 'status deve ser "pending" ou "paid"' });
+  }
+
+  const ref = cardRef(req.uid!, cardId);
+  const snapshot = await ref.collection('installments').where('invoiceMonth', '==', month).get();
+
+  if (snapshot.empty) {
+    return res.status(404).json({ error: 'Fatura sem parcelas para atualizar' });
+  }
+
+  const batch = db.batch();
+  snapshot.docs.forEach((doc) => batch.update(doc.ref, { status }));
+  await batch.commit();
+
+  res.json({ month, status, updated: snapshot.size });
 }
