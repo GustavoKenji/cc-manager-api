@@ -50,3 +50,13 @@ export function calcularStatusFatura(invoiceMonth: string, closingDay: number): 
   const dataFechamento = new Date(ano, mes - 1, closingDay);
   return hoje < dataFechamento ? 'open' : 'closed';
 }
+
+/**
+ * Faz o parse de uma data no formato "YYYY-MM-DD" como horário LOCAL,
+ * evitando o bug clássico de `new Date(string)` interpretar como UTC
+ * e "voltar um dia" em fusos horários negativos (como o Brasil).
+ */
+export function parseDataLocal(dateStr: string): Date {
+  const [ano, mes, dia] = dateStr.split('-').map(Number);
+  return new Date(ano, mes - 1, dia);
+}

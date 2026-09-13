@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import { db } from '../firebase';
 import { Card } from '../types';
-import { calcularInvoiceMonth, calcularDueDate } from '../utils/invoice';
+import { calcularInvoiceMonth, calcularDueDate, parseDataLocal } from '../utils/invoice';
 
 function cardRef(uid: string, cardId: string) {
   return db.collection('users').doc(uid).collection('cards').doc(cardId);
@@ -30,7 +30,7 @@ export async function createPurchase(req: Request, res: Response) {
 
   const card = cardDoc.data() as Card;
   const parcelas = installmentsCount && installmentsCount > 0 ? installmentsCount : 1;
-  const dataCompra = new Date(purchaseDate);
+  const dataCompra = parseDataLocal(purchaseDate);
   const valorParcelaBase = Math.round((totalAmount / parcelas) * 100) / 100;
 
   const purchaseRef = ref.collection('purchases').doc();
