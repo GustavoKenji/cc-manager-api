@@ -3,6 +3,9 @@ import 'dotenv/config';
 import express from 'express';
 import { requireAuth } from './middleware/auth';
 import cardsRoutes from './routes/cards.routes';
+import installmentsRoutes from './routes/installments.routes';
+import invoicesRoutes from './routes/invoices.routes';
+import purchasesRoutes from './routes/purchases.routes';
 
 const app = express();
 
@@ -14,6 +17,11 @@ app.use(express.json());
 app.get('/health', (_req, res) => res.json({ status: 'ok' }));
 
 // A partir daqui, todas as rotas exigem um token válido do Firebase Auth.
+// As rotas aninhadas (purchases, invoices, installments) são montadas
+// antes de /cards para deixar explícito que dependem de um :cardId.
+app.use('/cards/:cardId/purchases', requireAuth, purchasesRoutes);
+app.use('/cards/:cardId/invoices', requireAuth, invoicesRoutes);
+app.use('/cards/:cardId/installments', requireAuth, installmentsRoutes);
 app.use('/cards', requireAuth, cardsRoutes);
 
 const port = process.env.PORT || 8080;

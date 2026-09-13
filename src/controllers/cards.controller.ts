@@ -1,14 +1,49 @@
 import { Request, Response } from 'express';
 import { db } from '../firebase';
 import { Card } from '../types';
+import { calcularInvoiceMonth } from '../utils/invoice';
 
 function cardsCollection(uid: string) {
   return db.collection('users').doc(uid).collection('cards');
 }
 
+async function calcularCreditoDisponivel(uid: string, cardId: string, limit: number): Promise<number> {
+  const snapshot = await cardsCollection(uid)
+    .doc(cardId)
+    .collection('installments')
+    .where('status', '==', 'pending')
+    .get();
+  const usado = snapshot.docs.reduce((sum, doc) => sum + doc.data().amount, 0);
+  return Math.round((limit - usado) * 100) / 100;
+}
+
+async function calcularTotalFaturaAtual(uid: string, cardId: string, closingDay: number): Promise<number> {
+  // Reaproveita a mesma função de cálculo de ciclo que já usamos ao criar
+  // compras, só que com "hoje" no lugar da data da compra.
+  const invoiceMonth = calcularInvoiceMonth(new Date(), closingDay);
+
+  const snapshot = await cardsCollection(uid)
+    .doc(cardId)
+    .collection('installments')
+    .where('invoiceMonth', '==', invoiceMonth)
+    .get();
+
+  const total = snapshot.docs.reduce((sum, doc) => sum + doc.data().amount, 0);
+  return Math.round(total * 100) / 100;
+}
+
 export async function listCards(req: Request, res: Response) {
   const snapshot = await cardsCollection(req.uid!).orderBy('createdAt', 'desc').get();
-  const cards = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+  const cards = await Promise.all(
+    snapshot.docs.map(async (doc) => {
+      const card = doc.data() as Card;
+      const [availableCredit, currentInvoiceTotal] = await Promise.all([
+        calcularCreditoDisponivel(req.uid!, doc.id, card.limit),
+        calcularTotalFaturaAtual(req.uid!, doc.id, card.closingDay),
+      ]);
+      return { id: doc.id, ...card, availableCredit, currentInvoiceTotal };
+    })
+  );
   res.json(cards);
 }
 
@@ -19,7 +54,9 @@ export async function getCard(req: Request, res: Response) {
     return res.status(404).json({ error: 'Cartão não encontrado' });
   }
 
-  res.json({ id: doc.id, ...doc.data() });
+  const card = doc.data() as Card;
+  const availableCredit = await calcularCreditoDisponivel(req.uid!, doc.id, card.limit);
+  res.json({ id: doc.id, ...card, availableCredit });
 }
 
 export async function createCard(req: Request, res: Response) {
