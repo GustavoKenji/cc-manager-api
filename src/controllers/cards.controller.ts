@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import { db } from '../firebase';
 import { Card } from '../types';
-import { calcularInvoiceMonth, calcularDueDate, formatarDataISO } from '../utils/invoice';
+import { calcularDueDate, formatarDataISO, mesAtualISO, mesSeguinte } from '../utils/invoice';
 
 function cardsCollection(uid: string) {
   return db.collection('users').doc(uid).collection('cards');
@@ -17,24 +17,7 @@ async function calcularCreditoDisponivel(uid: string, cardId: string, limit: num
   return Math.round((limit - usado) * 100) / 100;
 }
 
-async function calcularTotalFaturaAtual(uid: string, cardId: string, closingDay: number): Promise<number> {
-  // Reaproveita a mesma função de cálculo de ciclo que já usamos ao criar
-  // compras, só que com "hoje" no lugar da data da compra.
-  const invoiceMonth = calcularInvoiceMonth(new Date(), closingDay);
-
-  const snapshot = await cardsCollection(uid)
-    .doc(cardId)
-    .collection('installments')
-    .where('invoiceMonth', '==', invoiceMonth)
-    .get();
-
-  const total = snapshot.docs.reduce((sum, doc) => sum + doc.data().amount, 0);
-  return Math.round(total * 100) / 100;
-}
-
-async function calcularFaturaAtual(uid: string, cardId: string, closingDay: number) {
-  const invoiceMonth = calcularInvoiceMonth(new Date(), closingDay);
-
+async function buscarResumoFatura(uid: string, cardId: string, invoiceMonth: string) {
   const snapshot = await cardsCollection(uid)
     .doc(cardId)
     .collection('installments')
@@ -44,10 +27,25 @@ async function calcularFaturaAtual(uid: string, cardId: string, closingDay: numb
   const total = snapshot.docs.reduce((sum, doc) => sum + doc.data().amount, 0);
   const paga = snapshot.docs.length > 0 && snapshot.docs.every((doc) => doc.data().status === 'paid');
 
-  return {
-    total: Math.round(total * 100) / 100,
-    status: paga ? ('paid' as const) : ('pending' as const),
-  };
+  return { total: Math.round(total * 100) / 100, paga };
+}
+
+/**
+ * A fatura vigente é a do mês corrente, enquanto não estiver totalmente
+ * paga. Só avança pra próxima quando a atual é quitada — não quando o
+ * fechamento passa. Isso evita "pular" uma fatura fechada e ainda não paga.
+ */
+async function calcularFaturaVigente(uid: string, cardId: string) {
+  const mesCorrente = mesAtualISO();
+  const resumoAtual = await buscarResumoFatura(uid, cardId, mesCorrente);
+
+  if (!resumoAtual.paga) {
+    return { invoiceMonth: mesCorrente, ...resumoAtual };
+  }
+
+  const proximoMes = mesSeguinte(mesCorrente);
+  const resumoProximo = await buscarResumoFatura(uid, cardId, proximoMes);
+  return { invoiceMonth: proximoMes, ...resumoProximo };
 }
 
 export async function listCards(req: Request, res: Response) {
@@ -57,16 +55,17 @@ export async function listCards(req: Request, res: Response) {
       const card = doc.data() as Card;
       const [availableCredit, fatura] = await Promise.all([
         calcularCreditoDisponivel(req.uid!, doc.id, card.limit),
-        calcularFaturaAtual(req.uid!, doc.id, card.closingDay),
+        calcularFaturaVigente(req.uid!, doc.id),
       ]);
-      const dataVencimento = calcularDueDate(calcularInvoiceMonth(new Date(), card.closingDay), card.closingDay, card.dueDay);
+      const dataVencimento = calcularDueDate(fatura.invoiceMonth, card.closingDay, card.dueDay);
 
       return {
         id: doc.id,
         ...card,
         availableCredit,
+        currentInvoiceMonth: fatura.invoiceMonth,
         currentInvoiceTotal: fatura.total,
-        currentInvoiceStatus: fatura.status,
+        currentInvoiceStatus: fatura.paga ? 'paid' : 'pending',
         currentInvoiceDueDate: formatarDataISO(dataVencimento),
       };
     })
@@ -82,8 +81,22 @@ export async function getCard(req: Request, res: Response) {
   }
 
   const card = doc.data() as Card;
-  const availableCredit = await calcularCreditoDisponivel(req.uid!, doc.id, card.limit);
-  res.json({ id: doc.id, ...card, availableCredit });
+  const [availableCredit, fatura] = await Promise.all([
+    calcularCreditoDisponivel(req.uid!, doc.id, card.limit),
+    calcularFaturaVigente(req.uid!, doc.id),
+  ]);
+
+  const dataVencimento = calcularDueDate(fatura.invoiceMonth, card.closingDay, card.dueDay);
+
+  res.json({
+    id: doc.id,
+    ...card,
+    availableCredit,
+    currentInvoiceMonth: fatura.invoiceMonth,
+    currentInvoiceTotal: fatura.total,
+    currentInvoiceStatus: fatura.paga ? 'paid' : 'pending',
+    currentInvoiceDueDate: formatarDataISO(dataVencimento),
+  });
 }
 
 export async function createCard(req: Request, res: Response) {

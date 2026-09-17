@@ -6,6 +6,7 @@ import cardsRoutes from './routes/cards.routes';
 import installmentsRoutes from './routes/installments.routes';
 import invoicesRoutes from './routes/invoices.routes';
 import purchasesRoutes from './routes/purchases.routes';
+import reportsRoutes from './routes/reports.routes';
 
 const app = express();
 
@@ -23,6 +24,7 @@ app.use('/cards/:cardId/purchases', requireAuth, purchasesRoutes);
 app.use('/cards/:cardId/invoices', requireAuth, invoicesRoutes);
 app.use('/cards/:cardId/installments', requireAuth, installmentsRoutes);
 app.use('/cards', requireAuth, cardsRoutes);
+app.use('/reports', requireAuth, reportsRoutes);
 
 const port = process.env.PORT || 8080;
 app.listen(port, () => {

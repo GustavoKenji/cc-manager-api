@@ -67,3 +67,14 @@ export function formatarDataISO(data: Date): string {
   const dia = String(data.getDate()).padStart(2, '0');
   return `${ano}-${mes}-${dia}`;
 }
+
+export function mesAtualISO(): string {
+  const hoje = new Date();
+  return `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, '0')}`;
+}
+
+export function mesSeguinte(mes: string): string {
+  const [ano, m] = mes.split('-').map(Number);
+  const data = new Date(ano, m, 1); // m já é o índice do mês seguinte (m-1+1)
+  return `${data.getFullYear()}-${String(data.getMonth() + 1).padStart(2, '0')}`;
+}
