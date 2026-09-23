@@ -17,35 +17,37 @@ async function calcularCreditoDisponivel(uid: string, cardId: string, limit: num
   return Math.round((limit - usado) * 100) / 100;
 }
 
-async function buscarResumoFatura(uid: string, cardId: string, invoiceMonth: string) {
-  const snapshot = await cardsCollection(uid)
-    .doc(cardId)
-    .collection('installments')
-    .where('invoiceMonth', '==', invoiceMonth)
-    .get();
-
-  const total = snapshot.docs.reduce((sum, doc) => sum + doc.data().amount, 0);
-  const paga = snapshot.docs.length > 0 && snapshot.docs.every((doc) => doc.data().status === 'paid');
-
-  return { total: Math.round(total * 100) / 100, paga };
-}
-
 /**
  * A fatura vigente é a do mês corrente, enquanto não estiver totalmente
  * paga. Só avança pra próxima quando a atual é quitada — não quando o
- * fechamento passa. Isso evita "pular" uma fatura fechada e ainda não paga.
+ * fechamento passa, ou quando nao houver lançamentos. Isso evita "pular" uma fatura fechada e ainda não paga.
  */
 async function calcularFaturaVigente(uid: string, cardId: string) {
-  const mesCorrente = mesAtualISO();
-  const resumoAtual = await buscarResumoFatura(uid, cardId, mesCorrente);
+  const snapshot = await cardsCollection(uid).doc(cardId).collection('installments').get();
 
-  if (!resumoAtual.paga) {
-    return { invoiceMonth: mesCorrente, ...resumoAtual };
+  const porMes = new Map<string, { amount: number; status: string }[]>();
+  snapshot.docs.forEach((doc) => {
+    const data = doc.data() as { invoiceMonth: string; amount: number; status: string };
+    const lista = porMes.get(data.invoiceMonth) ?? [];
+    lista.push({ amount: data.amount, status: data.status });
+    porMes.set(data.invoiceMonth, lista);
+  });
+
+  const mesCorrente = mesAtualISO();
+  const mesesComLancamento = [...porMes.keys()].filter((mes) => mes >= mesCorrente).sort();
+
+  for (const mes of mesesComLancamento) {
+    const installments = porMes.get(mes)!;
+    const paga = installments.every((i) => i.status === 'paid');
+
+    if (!paga) {
+      const total = installments.reduce((sum, i) => sum + i.amount, 0);
+      return { invoiceMonth: mes, total: Math.round(total * 100) / 100, paga: false };
+    }
   }
 
-  const proximoMes = mesSeguinte(mesCorrente);
-  const resumoProximo = await buscarResumoFatura(uid, cardId, proximoMes);
-  return { invoiceMonth: proximoMes, ...resumoProximo };
+  // Nenhuma fatura pendente a partir de hoje (tudo pago, ou nada lançado ainda)
+  return { invoiceMonth: mesCorrente, total: 0, paga: true };
 }
 
 export async function listCards(req: Request, res: Response) {
