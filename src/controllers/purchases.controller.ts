@@ -46,8 +46,8 @@ export async function createPurchase(req: Request, res: Response) {
   });
 
   for (let i = 0; i < parcelas; i++) {
-    const invoiceMonth = calcularInvoiceMonth(dataCompra, card.closingDay, i);
-    const dueDate = calcularDueDate(invoiceMonth, card.closingDay, card.dueDay);
+    const invoiceMonth = calcularInvoiceMonth(dataCompra, card.closingDay, card.dueDay, i);
+    const dueDate = calcularDueDate(invoiceMonth, card.dueDay);
     const installmentRef = ref.collection('installments').doc();
 
     // A última parcela absorve a diferença de arredondamento, pra soma

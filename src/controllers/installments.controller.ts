@@ -25,7 +25,7 @@ export async function getInvoice(req: Request, res: Response) {
   const status =
     installments.length > 0 && installments.every((i) => i.status === 'paid')
       ? 'paid'
-      : calcularStatusFatura(month, card.closingDay);
+      : calcularStatusFatura(month, card.closingDay, card.dueDay);
 
   res.json({ month, total: Math.round(total * 100) / 100, status, installments });
 }

@@ -59,7 +59,7 @@ export async function listCards(req: Request, res: Response) {
         calcularCreditoDisponivel(req.uid!, doc.id, card.limit),
         calcularFaturaVigente(req.uid!, doc.id),
       ]);
-      const dataVencimento = calcularDueDate(fatura.invoiceMonth, card.closingDay, card.dueDay);
+      const dataVencimento = calcularDueDate(fatura.invoiceMonth, card.dueDay);
 
       return {
         id: doc.id,
@@ -88,7 +88,7 @@ export async function getCard(req: Request, res: Response) {
     calcularFaturaVigente(req.uid!, doc.id),
   ]);
 
-  const dataVencimento = calcularDueDate(fatura.invoiceMonth, card.closingDay, card.dueDay);
+  const dataVencimento = calcularDueDate(fatura.invoiceMonth, card.dueDay);
 
   res.json({
     id: doc.id,

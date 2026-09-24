@@ -39,7 +39,7 @@ export async function getInvoicesReport(req: Request, res: Response) {
       const paga = installments.every((i) => i.status === 'paid');
       if (paga) continue; // já decidimos excluir faturas pagas do relatório
 
-      const dueDateISO = formatarDataISO(calcularDueDate(invoiceMonth, card.closingDay, card.dueDay));
+      const dueDateISO = formatarDataISO(calcularDueDate(invoiceMonth, card.dueDay));
       if (dueDateISO < from || dueDateISO > to) continue;
 
       const total = installments.reduce((sum, i) => sum + i.amount, 0);
