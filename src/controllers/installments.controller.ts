@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import { db } from '../firebase';
 import { Card, Installment, InstallmentStatus } from '../types';
-import { calcularStatusFatura } from '../utils/invoice';
+import { calcularStatusFatura, formatarDataISO } from '../utils/invoice';
 
 function cardRef(uid: string, cardId: string) {
   return db.collection('users').doc(uid).collection('cards').doc(cardId);
@@ -27,7 +27,25 @@ export async function getInvoice(req: Request, res: Response) {
       ? 'paid'
       : calcularStatusFatura(month, card.closingDay, card.dueDay);
 
-  res.json({ month, total: Math.round(total * 100) / 100, status, installments });
+  const purchaseIds = [...new Set(installments.map((i) => i.purchaseId))];
+  const purchaseDocs =
+    purchaseIds.length > 0
+      ? await db.getAll(...purchaseIds.map((id) => ref.collection('purchases').doc(id)))
+      : [];
+
+  const purchaseDateById = new Map<string, string | null>(
+    purchaseDocs.map((doc) => [
+      doc.id,
+      doc.exists ? formatarDataISO(doc.data()!.purchaseDate.toDate()) : null,
+    ]),
+  );
+
+  const installmentsComData = installments.map((i) => ({
+    ...i,
+    purchaseDate: purchaseDateById.get(i.purchaseId) ?? null,
+  }));
+
+  res.json({ month, total: Math.round(total * 100) / 100, status, installments: installmentsComData });
 }
 
 export async function listInvoiceMonths(req: Request, res: Response) {
